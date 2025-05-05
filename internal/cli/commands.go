@@ -1,6 +1,11 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
+	"strings"
+	"syscall"
+
 	"github.com/kelsonic-networks/kelca/internal/ca"
 	"github.com/kelsonic-networks/kelca/internal/storage"
 	"github.com/spf13/cobra"
@@ -59,4 +64,66 @@ func createRootCACmd() *cobra.Command {
 	cmd.MarkFlagRequired("common-name")
 
 	return cmd
+}
+
+func promptMasterPassword(confirmPassword bool) (string, error) {
+	fmt.Print("Enter master password: ")
+	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", errors.New("failed to read password")
+	}
+	fmt.Println()
+
+	password := strings.TrimSpace(string(passwordBytes))
+
+	if len(password) < 8 {
+		return "", errors.New("password must be at least 8 characters long")
+	}
+
+	if !isStrongPassword(password) {
+		return "", errors.New("password is too weak; use a mix of uppercase, lowercase, numbers and symbols")
+	}
+
+	if confirmPassword {
+		fmt.Print("Confirm master password: ")
+		confirmBytes, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return "", errors.New("failed to read confirmation password")
+		}
+		fmt.Println()
+
+		confirmPass := strings.TrimSpace(string(confirmBytes))
+
+		if password != confirmPass {
+			return "", errors.New("passwords do not match")
+		}
+	}
+
+	return password, nil
+}
+
+func isStrongPassword(password string) bool {
+	hasUpper := strings.ContainsAny(password, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	hasLower := strings.ContainsAny(password, "abcdefghijklmnopqrstuvwxyz")
+	hasNumber := strings.ContainsAny(password, "0123456789")
+	hasSymbol := strings.ContainsAny(password, "!@#$%^&*()-_=+[]{}|;:,.<>?/")
+
+	score := 0
+	if hasUpper {
+		score++
+	}
+	if hasLower {
+		score++
+	}
+	if hasNumber {
+		score++
+	}
+	if hasSymbol {
+		score++
+	}
+	if len(password) >= 12 {
+		score++
+	}
+
+	return score >= 4
 }
